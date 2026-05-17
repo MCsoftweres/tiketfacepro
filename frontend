@@ -1,0 +1,213 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import datetime
+
+class TicketFacePro:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("TicketFace PRO - PDV")
+        self.root.geometry("1100x650")
+        self.root.configure(bg="#121214")  # Fundo ultra escuro
+        
+        # Paleta de Cores
+        self.colors = {
+            "bg": "#121214",
+            "card": "#1A1A1E",
+            "text": "#FFFFFF",
+            "text_muted": "#8D8D99",
+            "venda": "#00875F",       # Verde Smaragd
+            "pagamento": "#4EA8DE",   # Azul Claro
+            "face": "#9B5DE5",        # Roxo Neon
+            "btn_hover_venda": "#00B37E",
+            "btn_hover_pag": "#64B5F6",
+            "btn_hover_face": "#B5179E"
+        }
+        
+        # Estado do PDV (Dados mockados para demonstração)
+        self.items_venda = [
+            {"item": "001", "desc": "Ingresso VIP - Festival", "qtd": 1, "preco": 250.00},
+            {"item": "002", "desc": "Taxa de Conveniência", "qtd": 1, "preco": 25.00},
+        ]
+        
+        self.setup_styles()
+        self.create_layout()
+        self.atualizar_total()
+
+    def setup_styles(self):
+        """Configura estilos específicos para componentes do Tkinter/TTK"""
+        style = ttk.Style()
+        style.theme_use("clam")
+        
+        # Estilização da Tabela (Treeview)
+        style.configure("Treeview",
+                        background=self.colors["card"],
+                        fieldbackground=self.colors["card"],
+                        foreground=self.colors["text"],
+                        rowheight=35,
+                        font=("Segoe UI", 11),
+                        borderwidth=0)
+        
+        style.configure("Treeview.Heading",
+                        background="#29292E",
+                        foreground=self.colors["text"],
+                        font=("Segoe UI", 11, "bold"),
+                        borderwidth=0)
+        
+        # Mudar cor de seleção da tabela
+        style.map("Treeview", background=[("selected", "#29292E")])
+
+    def create_layout(self):
+        # ------------------ BARRA SUPERIOR ------------------
+        top_bar = tk.Frame(self.root, bg=self.colors["card"], height=60)
+        top_bar.pack(fill="x", side="top", padx=10, pady=5)
+        top_bar.pack_propagate(False)
+        
+        lbl_logo = tk.Label(top_bar, text="TICKETFACE PRO", fg=self.colors["face"], bg=self.colors["card"], font=("Segoe UI", 16, "bold"))
+        lbl_logo.pack(side="left", padx=20)
+        
+        self.lbl_status = tk.Label(top_bar, text="CAIXA LIVRE", fg="#00B37E", bg=self.colors["card"], font=("Segoe UI", 11, "bold"))
+        self.lbl_status.pack(side="right", padx=20)
+
+        # ------------------ CORPO PRINCIPAL ------------------
+        main_container = tk.Frame(self.root, bg=self.colors["bg"])
+        main_container.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Painel da Esquerda (Lista de Compras / Itens)
+        left_panel = tk.Frame(main_container, bg=self.colors["card"])
+        left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        
+        lbl_carrinho = tk.Label(left_panel, text="Itens da Venda Atual", fg=self.colors["text"], bg=self.colors["card"], font=("Segoe UI", 14, "bold"))
+        lbl_carrinho.pack(anchor="w", padx=20, pady=15)
+        
+        # Tabela de Itens
+        columns = ("id", "desc", "qtd", "total")
+        self.tree = ttk.Treeview(left_panel, columns=columns, show="headings")
+        self.tree.heading("id", text="Cód.")
+        self.tree.heading("desc", text="Descrição do Item")
+        self.tree.heading("qtd", text="Qtd")
+        self.tree.heading("total", text="Total (R$)")
+        
+        self.tree.column("id", width=60, anchor="center")
+        self.tree.column("desc", width=250, anchor="w")
+        self.tree.column("qtd", width=50, anchor="center")
+        self.tree.column("total", width=100, anchor="e")
+        self.tree.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        # Inserir dados iniciais na tabela
+        for i in self.items_venda:
+            self.tree.insert("", "end", values=(i["item"], i["desc"], i["qtd"], f"{i['preco'] * i['qtd']:.2f}"))
+
+        # Painel da Direita (Controles e Botões Grandes)
+        right_panel = tk.Frame(main_container, bg=self.colors["bg"], width=400)
+        right_panel.pack(side="right", fill="both", padx=(10, 0))
+        right_panel.pack_propagate(False)
+        
+        # Card do Totalizador
+        total_card = tk.Frame(right_panel, bg=self.colors["card"], height=120)
+        total_card.pack(fill="x", pady=(0, 20))
+        total_card.pack_propagate(False)
+        
+        lbl_total_title = tk.Label(total_card, text="TOTAL A PAGAR", fg=self.colors["text_muted"], bg=self.colors["card"], font=("Segoe UI", 11, "bold"))
+        lbl_total_title.pack(anchor="w", padx=20, pady=(15, 0))
+        
+        self.lbl_total_val = tk.Label(total_card, text="R$ 0,00", fg=self.colors["text"], bg=self.colors["card"], font=("Segoe UI", 32, "bold"))
+        self.lbl_total_val.pack(anchor="w", padx=18)
+
+        # ------------------ BOTÕES GRANDES (AÇÕES) ------------------
+        # Botão 1: Nova Venda
+        self.btn_venda = tk.Button(
+            right_panel, text="[F1] NOVA VENDA", bg=self.colors["venda"], fg=self.colors["text"],
+            font=("Segoe UI", 14, "bold"), bd=0, relief="flat", cursor="hand2",
+            command=self.acao_nova_venda
+        )
+        self.btn_venda.pack(fill="x", pady=10, ipady=25)
+        self.setup_hover(self.btn_venda, self.colors["venda"], self.colors["btn_hover_venda"])
+        
+        # Botão 2: Validar Face
+        self.btn_face = tk.Button(
+            right_panel, text="[F2] VALIDAR FACE", bg=self.colors["face"], fg=self.colors["text"],
+            font=("Segoe UI", 14, "bold"), bd=0, relief="flat", cursor="hand2",
+            command=self.acao_validar_face
+        )
+        self.btn_face.pack(fill="x", pady=10, ipady=25)
+        self.setup_hover(self.btn_face, self.colors["face"], self.colors["btn_hover_face"])
+
+        # Botão 3: Pagamento
+        self.btn_pagamento = tk.Button(
+            right_panel, text="[F3] PAGAMENTO", bg=self.colors["pagamento"], fg=self.colors["text"],
+            font=("Segoe UI", 14, "bold"), bd=0, relief="flat", cursor="hand2",
+            command=self.acao_pagamento
+        )
+        self.btn_pagamento.pack(fill="x", pady=10, ipady=25)
+        self.setup_hover(self.btn_pagamento, self.colors["pagamento"], self.colors["btn_hover_pag"])
+
+        # Atalhos do teclado
+        self.root.bind("<F1>", lambda event: self.acao_nova_venda())
+        self.root.bind("<F2>", lambda event: self.acao_validar_face())
+        self.root.bind("<F3>", lambda event: self.acao_pagamento())
+
+    # ------------------ LÓGICA E INTERAÇÕES ------------------
+    def setup_hover(self, button, color_normal, color_hover):
+        """Adiciona efeito visual ao passar o mouse pelos botões"""
+        button.bind("<Enter>", lambda e: button.config(bg=color_hover))
+        button.bind("<Leave>", lambda e: button.config(bg=color_normal))
+
+    def atualizar_total(self):
+        total = sum(i["preco"] * i["qtd"] for i in self.items_venda)
+        self.lbl_total_val.config(text=f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    def acao_nova_venda(self):
+        self.lbl_status.config(text="EM ATENDIMENTO", fg="#4EA8DE")
+        # Exemplo simples de adicionar item ao iniciar/resetar venda
+        self.items_venda = [
+            {"item": "001", "desc": "Ingresso VIP - Festival", "qtd": 1, "preco": 250.00},
+            {"item": "003", "desc": "Bebida Energética", "qtd": 2, "preco": 15.00}
+        ]
+        # Limpa tabela e reinsere
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for i in self.items_venda:
+            self.tree.insert("", "end", values=(i["item"], i["desc"], i["qtd"], f"{i['preco'] * i['qtd']:.2f}"))
+        self.atualizar_total()
+
+    def acao_validar_face(self):
+        # Simulação de Reconhecimento Facial
+        self.lbl_status.config(text="ESCANEANDO FACE...", fg=self.colors["face"])
+        self.root.update()
+        
+        # Janela de Feedback Simulada
+        self.root.after(1000) # Pequena pausa dramática para o scanner
+        messagebox.showinfo("TicketFace Auth", "Face Reconhecida com sucesso!\nCliente: Guilherme R.\nDesconto Fidelidade Aplicado: 10%")
+        
+        # Aplica lógica de desconto mockada
+        for i in self.items_venda:
+            if "VIP" in i["desc"]:
+                i["preco"] *= 0.90 
+                
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for i in self.items_venda:
+            self.tree.insert("", "end", values=(i["item"], f"{i['desc']} (Desc. Face)", i["qtd"], f"{i['preco'] * i['qtd']:.2f}"))
+            
+        self.atualizar_total()
+        self.lbl_status.config(text="FACE VALIDADA", fg=self.colors["face"])
+
+    def acao_pagamento(self):
+        if not self.items_venda:
+            messagebox.showwarning("Aviso", "Nenhum item no carrinho!")
+            return
+        
+        total = sum(i["preco"] * i["qtd"] for i in self.items_venda)
+        resposta = messagebox.askyesno("Finalizar", f"Total: R$ {total:.2f}\nConfirmar recebimento do pagamento?")
+        if resposta:
+            messagebox.showinfo("Sucesso", "Venda finalizada com sucesso! Comprovante emitido.")
+            self.items_venda = []
+            for row in self.tree.get_children():
+                self.tree.delete(row)
+            self.atualizar_total()
+            self.lbl_status.config(text="CAIXA LIVRE", fg="#00B37E")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TicketFacePro(root)
+    root.mainloop()
