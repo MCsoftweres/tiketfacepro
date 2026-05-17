@@ -1,0 +1,215 @@
+# app.py
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+import uuid
+
+app = Flask(__name__)
+
+# =========================
+# CONFIGURAÇÃO DATABASE
+# =========================
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ticketface_pro.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# =========================
+# MODELOS
+# =========================
+
+class Evento(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    local = db.Column(db.String(150), nullable=False)
+    data = db.Column(db.String(50), nullable=False)
+    ingressos = db.Column(db.Integer, nullable=False)
+
+class Venda(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cliente = db.Column(db.String(150), nullable=False)
+    evento_id = db.Column(db.Integer, nullable=False)
+    quantidade = db.Column(db.Integer, nullable=False)
+    codigo = db.Column(db.String(100), unique=True)
+    status = db.Column(db.String(50), default="PENDENTE")
+
+class Pagamento(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(db.Integer, nullable=False)
+    valor = db.Column(db.Float, nullable=False)
+    metodo = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50), default="APROVADO")
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+
+# =========================
+# ROTA HOME
+# =========================
+
+@app.route("/")
+def home():
+    return jsonify({
+        "sistema": "TicketFace PRO",
+        "status": "online"
+    })
+
+# =========================
+# EVENTOS
+# =========================
+
+@app.route("/eventos", methods=["GET", "POST"])
+def eventos():
+
+    # LISTAR EVENTOS
+    if request.method == "GET":
+        lista = Evento.query.all()
+
+        dados = []
+
+        for e in lista:
+            dados.append({
+                "id": e.id,
+                "nome": e.nome,
+                "local": e.local,
+                "data": e.data,
+                "ingressos": e.ingressos
+            })
+
+        return jsonify(dados)
+
+    # CRIAR EVENTO
+    if request.method == "POST":
+        dados = request.json
+
+        novo = Evento(
+            nome=dados["nome"],
+            local=dados["local"],
+            data=dados["data"],
+            ingressos=dados["ingressos"]
+        )
+
+        db.session.add(novo)
+        db.session.commit()
+
+        return jsonify({
+            "mensagem": "Evento criado com sucesso"
+        }), 201
+
+# =========================
+# VENDA
+# =========================
+
+@app.route("/venda", methods=["POST"])
+def venda():
+
+    dados = request.json
+
+    evento = Evento.query.get(dados["evento_id"])
+
+    if not evento:
+        return jsonify({
+            "erro": "Evento não encontrado"
+        }), 404
+
+    if evento.ingressos < dados["quantidade"]:
+        return jsonify({
+            "erro": "Ingressos insuficientes"
+        }), 400
+
+    codigo_ticket = str(uuid.uuid4())
+
+    nova_venda = Venda(
+        cliente=dados["cliente"],
+        evento_id=dados["evento_id"],
+        quantidade=dados["quantidade"],
+        codigo=codigo_ticket,
+        status="AGUARDANDO PAGAMENTO"
+    )
+
+    evento.ingressos -= dados["quantidade"]
+
+    db.session.add(nova_venda)
+    db.session.commit()
+
+    return jsonify({
+        "mensagem": "Venda criada",
+        "ticket": codigo_ticket
+    })
+
+# =========================
+# PAGAMENTO
+# =========================
+
+@app.route("/pagamento", methods=["POST"])
+def pagamento():
+
+    dados = request.json
+
+    venda = Venda.query.get(dados["venda_id"])
+
+    if not venda:
+        return jsonify({
+            "erro": "Venda não encontrada"
+        }), 404
+
+    novo_pagamento = Pagamento(
+        venda_id=venda.id,
+        valor=dados["valor"],
+        metodo=dados["metodo"],
+        status="PAGO"
+    )
+
+    venda.status = "PAGO"
+
+    db.session.add(novo_pagamento)
+    db.session.commit()
+
+    return jsonify({
+        "mensagem": "Pagamento aprovado"
+    })
+
+# =========================
+# VALIDAR INGRESSO
+# =========================
+
+@app.route("/validar", methods=["POST"])
+def validar():
+
+    dados = request.json
+
+    venda = Venda.query.filter_by(
+        codigo=dados["codigo"]
+    ).first()
+
+    if not venda:
+        return jsonify({
+            "valido": False,
+            "mensagem": "Ingresso inválido"
+        }), 404
+
+    if venda.status != "PAGO":
+        return jsonify({
+            "valido": False,
+            "mensagem": "Pagamento pendente"
+        }), 400
+
+    return jsonify({
+        "valido": True,
+        "mensagem": "Ingresso válido",
+        "cliente": venda.cliente
+    })
+
+# =========================
+# INICIAR SERVIDOR
+# =========================
+
+if __name__ == "__main__":
+
+    with app.app_context():
+        db.create_all()
+
+    # host=0.0.0.0 permite múltiplos clientes via rede
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=True
+    )
